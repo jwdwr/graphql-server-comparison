@@ -1,0 +1,64 @@
+"""The root query"""
+type Query {
+  users: [User]
+  user(
+    """User ID"""
+    userId: Int!
+  ): User
+  posts: [Post]
+  post(
+    """Post ID"""
+    postId: Int!
+  ): Post
+  comments: [comment]
+  comment(
+    """Comment ID"""
+    commentId: Int!
+  ): comment
+}
+
+"""Blog user"""
+interface User {
+  """User ID"""
+  userId: Int!
+
+  """User email address"""
+  email: String!
+
+  """User name"""
+  name: String!
+  posts: [Post]
+}
+
+"""Blog post"""
+interface Post {
+  """Post ID"""
+  postId: Int!
+
+  """ID of user who posted the blog"""
+  userId: Int!
+
+  """Post title"""
+  title: String!
+
+  """Post content"""
+  content: String!
+  user: User
+  comments: [comment]
+}
+
+"""Blog comment"""
+interface comment {
+  """Comment ID"""
+  commentId: Int!
+
+  """ID of user who posted the comment"""
+  userId: Int!
+
+  """ID of post commented on"""
+  postId: String!
+
+  """Comment content"""
+  content: String!
+  user: User
+}
