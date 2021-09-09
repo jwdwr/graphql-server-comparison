@@ -4,77 +4,103 @@ import express from "express";
 import { graphqlHTTP } from "express-graphql";
 import { Arg, Args, ArgsType, buildSchema, Field, ID, Mutation, ObjectType, Query, Resolver, Root } from "type-graphql";
 
-const knex = require("knex");
-const client = knex({
-  client: "mysql",
-  connection: {
-    host     : "localhost",
-    user     : "graphql",
-    password : "graphql",
-    database : "blog"
-  }
-});
+import { PrismaClient, post, user, comment } from '@prisma/client'
+const prisma = new PrismaClient()
 
 @ObjectType()
 class User {
+  constructor(dbUser: user) {
+    this.userId = dbUser.userId;
+    this.email = dbUser.email;
+    this.name = dbUser.name;
+  }
   @Field(type => Number, {description: "User ID"})
-  userId!: number;
+  userId: number;
 
   @Field({description: "User email address"})
-  email!: string;
+  email: string;
 
   @Field({description: "User name"})
-  name!: string;
+  name: string;
 
   @Field(type => [Post], {description: "Posts by user"})
-  posts(@Root() user: User): Post[] {
-    return client("post").select("*").where({userId: user.userId});
+  async posts(@Root() user: User): Promise<Post[]> {
+    const dbPosts = await prisma.post.findMany({where: {userId: user.userId}});
+    return dbPosts.map((dbPost) => new Post(dbPost))
   }
 }
 
 @ObjectType()
 class Post {
-  @Field(type => Number, {description: "Post ID"})
-  postId!: number;
-
-  @Field(type => Number, {description: "ID of user who posted"})
-  userId!: number;
-
-  @Field(type => User, {description: "User who posted"})
-  user(@Root() post: Post): User {
-    return client("user").select("*").where({userId: post.userId}).first()
+  constructor(dbPost: post) {
+    this.postId = dbPost.postId;
+    this.userId = dbPost.userId;
+    this.title = dbPost.title;
+    this.content = dbPost.content;
   }
 
+  @Field(type => Number, {description: "Post ID"})
+  postId: number;
+
+  @Field(type => Number, {description: "ID of user who posted"})
+  userId: number;
+
   @Field({description: "Post title"})
-  title!: string;
+  title: string;
 
   @Field({description: "Post content"})
-  content!: string;
+  content: string;
+
+  @Field(type => User, {description: "User who posted"})
+  async user(@Root() post: Post): Promise<User | undefined> {
+    const dbUser = await prisma.user.findFirst({where: {userId: post.userId}});
+    if (dbUser) return new User(dbUser);
+  }
 
   @Field(type => [Post], {description: "Comments on post"})
-  comments(@Root() post: Post): Comment[] {
-    return client("comment").select("*").where({postId: post.postId});
+  async comments(@Root() post: Post): Promise<Comment[]> {
+    const dbComments = await prisma.comment.findMany({where: {postId: post.postId}});
+    return dbComments.map((dbComment) => new Comment(dbComment))
   }
 }
 
 @ObjectType()
 class Comment {
-  @Field(type => Number, {description: "Comment ID"})
-  commentId!: number;
-
-  @Field(type => Number, {description: "ID of user who commented"})
-  userId!: number;
-
-  @Field(type => User, {description: "User who commented"})
-  user(@Root() comment: Comment): User {
-    return client("user").select("*").where({userId: comment.userId}).first()
+  constructor(dbComment: comment) {
+    this.commentId = dbComment.commentId;
+    this.userId = dbComment.userId;
+    this.postId = dbComment.postId;
+    this.content = dbComment.content;
   }
 
-  @Field({description: "Comment email address"})
-  title!: string;
+  @Field(type => Number, {description: "Comment ID"})
+  commentId: number;
 
-  @Field({description: "Comment name"})
-  content!: string;
+  @Field(type => Number, {description: "ID of user who commented"})
+  userId: number;
+
+  @Field(type => User, {description: "User who commented"})
+  async user(@Root() comment: Comment): Promise<User | undefined> {
+    const dbUser = await prisma.user.findFirst({where: {userId: comment.userId}});
+    if (dbUser) return new User(dbUser);
+  }
+
+  @Field(type => Number, {description: "ID of post that was commented on"})
+  postId: number;
+
+  @Field(type => Post, {description: "Post that was commented on"})
+  async post(@Root() comment: Comment): Promise<post | undefined> {
+    const dbPost = await prisma.post.findFirst({where: {postId: comment.postId}});
+    if (dbPost) return new Post(dbPost);
+  }
+
+  @Field({description: "Comment content"})
+  content: string;
+
+  async findFirst(where: Partial<comment>): Promise<Comment | undefined> {
+    const dbComment = await prisma.comment.findFirst({where});
+    if (dbComment) return new Comment(dbComment);
+  }
 }
 
 @ArgsType()
@@ -90,52 +116,53 @@ class PostArgs {
 @Resolver()
 export class RootResolver {
   @Query(() => User)
-  user(
+  async user(
     @Arg("userId", {description: "User ID"}) userId: number
-  ): User {
-    return client('user').select("*").where({userId}).first();
+  ): Promise<User | undefined> {
+    const dbUser = await prisma.user.findFirst({where: {userId}});
+    if (dbUser) return new User(dbUser);
   }
 
   @Query(() => [User])
-  users(): User[] {
-    return client('user').select("*");
+  async users(): Promise<User[]> {
+    const dbUsers = await prisma.user.findMany();
+    return dbUsers.map((dbUser) => new User(dbUser));
   }
 
   @Query(() => Post)
-  post(
+  async post(
     @Arg("postId", {description: "Post ID"}) postId: number
-  ): Post {
-    return client('post').select("*").where({postId}).first();
+  ): Promise<Post | undefined> {
+    const dbPost = await prisma.post.findFirst({where: {postId}});
+    if (dbPost) return new Post(dbPost);
   }
 
   @Query(() => [Post])
-  posts(): Post[] {
-    return client('post').select("*");
+  async posts(): Promise<Post[]> {
+    const dbPosts = await prisma.post.findMany();
+    return dbPosts.map((dbPost) => new Post(dbPost));
   }
 
-  @Mutation(returns => Number)
+  @Mutation(() => User)
   async addUser(
     @Arg("email") email: string,
     @Arg("name") name: string
-  ) {
-    const [id] = await client("user").insert({ email, name });
-    return id;
+  ): Promise<User> {
+    return new User(await prisma.user.create({data: {email, name}}));
   }
 
-  @Mutation(returns => Number)
-  async addPost(@Args() {userId, title, content}: PostArgs) {
-    const [id] = await client("post").insert({ userId, title, content });
-    return id;
+  @Mutation(() => Post)
+  async addPost(@Args() {userId, title, content}: PostArgs): Promise<Post> {
+    return new Post(await prisma.post.create({data: {userId, title, content}}));
   }
 
-  @Mutation(returns => Number)
+  @Mutation(() => Comment)
   async addComment(
     @Arg("userId") userId: number,
     @Arg("postId") postId: number,
     @Arg("content") content: string
-  ) {
-    const [id] = await client("comment").insert({ userId, postId, content });
-    return id;
+  ): Promise<Comment> {
+    return new Comment(await prisma.comment.create({data: {userId, postId, content}}));
   }
 }
 

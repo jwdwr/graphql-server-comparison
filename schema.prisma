@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = "mysql://graphql:graphql@localhost:3306/blog"
+}
+
+model comment {
+  commentId Int     @id @default(autoincrement())
+  content   String @db.Text
+  postId    Int
+  userId    Int
+  post      post   @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction, map: "commentPost")
+  user      user   @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "commentUser")
+
+  @@index([postId], map: "postId_idx")
+  @@index([userId], map: "userId_idx")
+}
+
+model post {
+  postId  Int       @id @default(autoincrement())
+  title   String    @db.VarChar(200)
+  content String    @db.Text
+  userId  Int
+  user    user      @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "postUser")
+  comment comment[]
+
+  @@index([userId], map: "userId_idx")
+}
+
+model user {
+  userId  Int       @id @unique(map: "userId_UNIQUE") @default(autoincrement())
+  email   String    @unique(map: "email_UNIQUE") @db.VarChar(100)
+  name    String    @db.VarChar(45)
+  comment comment[]
+  post    post[]
+}
