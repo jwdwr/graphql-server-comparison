@@ -36,12 +36,8 @@ const UserType: GraphQLObjectType = new GraphQLObjectType({
     },
     posts: {
       type: new GraphQLList(PostType),
-      resolve: (user, _, context: {connection: Connection}) => {
-        return context.connection
-          .getRepository(DbPost)
-          .createQueryBuilder("post")
-          .where("post.userId = :userId", {userId: user.userId})
-          .getMany();
+      resolve: (user, _, context: {connection: Connection}): Promise<Post | undefined> => {
+        return context.connection.getRepository(DbPost).findOne({userId: user.userId})
       }
     },
   }),
@@ -70,21 +66,13 @@ const PostType: GraphQLObjectType = new GraphQLObjectType({
     user: {
       type: UserType,
       resolve: (post, _, context: {connection: Connection}): Promise<User | undefined> => {
-        return context.connection
-          .getRepository(DbUser)
-          .createQueryBuilder("user")
-          .where("user.userId = :userId", {userId: post.userId})
-          .getOne();
+        return context.connection.getRepository(DbUser).findOne({userId: post.userId});
       }
     },
     comments: {
       type: new GraphQLList(CommentType),
       resolve: (post, _, context: {connection: Connection}): Promise<Comment[]> => {
-        return context.connection
-          .getRepository(DbComment)
-          .createQueryBuilder("comment")
-          .where("comment.postId = :postId", {postId: post.postId})
-          .getMany();
+        return context.connection.getRepository(DbComment).find({postId: post.postId});
       }
     },
   }),
@@ -113,11 +101,7 @@ const CommentType: GraphQLObjectType = new GraphQLObjectType({
     user: {
       type: UserType,
       resolve: (comment, _, context: {connection: Connection}): Promise<User | undefined> => {
-        return context.connection
-          .getRepository(DbUser)
-          .createQueryBuilder("user")
-          .where("user.userId = :userId", {userId: comment.userId})
-          .getOne();
+        return context.connection.getRepository(DbUser).findOne({userId: comment.userId})
       }
     }
   }),
@@ -132,20 +116,13 @@ const schema = new GraphQLSchema({
           users: {
             type: new GraphQLList(UserType),
             async resolve(_, __, context: {connection: Connection}): Promise<User[]> {
-              return context.connection
-                .getRepository(DbUser)
-                .createQueryBuilder("user")
-                .getMany();
+              return context.connection.getRepository(DbUser).find()
             },
           },
           user: {
             type: UserType,
             async resolve(_, {userId}, context): Promise<User | undefined> {
-              return context.connection
-                .getRepository(DbUser)
-                .createQueryBuilder("user")
-                .where("user.userId = :userId", {userId})
-                .getOne();
+              return context.connection.getRepository(DbUser).findOne({userId});
             },
             args: {
               userId: {
@@ -157,20 +134,13 @@ const schema = new GraphQLSchema({
           posts: {
             type: new GraphQLList(PostType),
             async resolve(_, __, context: {connection: Connection}): Promise<Post[]> {
-              return context.connection
-                .getRepository(DbPost)
-                .createQueryBuilder("post")
-                .getMany();
+              return context.connection.getRepository(DbPost).find();
             },
           },
           post: {
             type: PostType,
             async resolve(_, {postId}, context: {connection: Connection}): Promise<Post | undefined> {
-              return context.connection
-                .getRepository(DbPost)
-                .createQueryBuilder("post")
-                .where("post.postId = :postId", {postId})
-                .getOne();
+              return context.connection.getRepository(DbPost).findOne({postId})
             },
             args: {
               postId: {
@@ -182,20 +152,13 @@ const schema = new GraphQLSchema({
           comments: {
             type: new GraphQLList(CommentType),
             async resolve(_, __, context: {connection: Connection}): Promise<Comment[]> {
-              return context.connection
-                .getRepository(DbComment)
-                .createQueryBuilder("comment")
-                .getMany();
+              return context.connection.getRepository(DbComment).find();
             },
           },
           comment: {
             type: CommentType,
             async resolve(_source, {commentId}, context: {connection: Connection}): Promise<Comment | undefined> {
-              return context.connection
-                .getRepository(DbComment)
-                .createQueryBuilder("comment")
-                .where("comment.commentId = :commentId", {commentId})
-                .getOne();
+              return context.connection.getRepository(DbComment).findOne({commentId})
             },
             args: {
               commentId: {
