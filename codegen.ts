@@ -1,6 +1,6 @@
 import express from "express";
 import { graphqlHTTP } from "express-graphql";
-import { GraphQLSchema, GraphQLObjectType, GraphQLNonNull, GraphQLInt, GraphQLString, GraphQLList, GraphQLInterfaceType } from "graphql";
+import { GraphQLSchema, GraphQLNonNull, GraphQLInt, GraphQLString, GraphQLList, GraphQLObjectType } from "graphql";
 
 import * as fs from "fs";
 import * as schemaAstPlugin from "@graphql-codegen/schema-ast";
@@ -12,18 +12,13 @@ import { Types } from "@graphql-codegen/plugin-helpers";
 import { codegen } from "@graphql-codegen/core";
 import path from "path";
 
-const knex = require("knex");
-const client = knex({
-  client: "mysql",
-  connection: {
-    host     : "localhost",
-    user     : "graphql",
-    password : "graphql",
-    database : "blog"
-  }
-});
+import { Comment as DbComment, User as DbUser, Post as DbPost, getConnection } from "./typeorm";
+import { User, Post, Comment } from "./generated";
+import { Connection } from "typeorm";
 
-const UserType: GraphQLInterfaceType = new GraphQLInterfaceType({
+/* graphql defs */
+
+const UserType: GraphQLObjectType = new GraphQLObjectType({
   name: "User",
   description: "Blog user",
   fields: () => ({
@@ -41,12 +36,18 @@ const UserType: GraphQLInterfaceType = new GraphQLInterfaceType({
     },
     posts: {
       type: new GraphQLList(PostType),
-      resolve: (user: any) => client("post").select("*").where({userId: user.userId})
+      resolve: (user, _, context: {connection: Connection}) => {
+        return context.connection
+          .getRepository(DbPost)
+          .createQueryBuilder("post")
+          .where("post.userId = :userId", {userId: user.userId})
+          .getMany();
+      }
     },
   }),
 });
 
-const PostType: GraphQLInterfaceType = new GraphQLInterfaceType({
+const PostType: GraphQLObjectType = new GraphQLObjectType({
   name: "Post",
   description: "Blog post",
   fields: () => ({
@@ -68,16 +69,28 @@ const PostType: GraphQLInterfaceType = new GraphQLInterfaceType({
     },
     user: {
       type: UserType,
-      resolve: (post) => client("user").select("*").where({userId: post.userId}).first()
+      resolve: (post, _, context: {connection: Connection}): Promise<User | undefined> => {
+        return context.connection
+          .getRepository(DbUser)
+          .createQueryBuilder("user")
+          .where("user.userId = :userId", {userId: post.userId})
+          .getOne();
+      }
     },
     comments: {
       type: new GraphQLList(CommentType),
-      resolve: (post) => client("comment").select("*").where({postId: post.postId})
+      resolve: (post, _, context: {connection: Connection}): Promise<Comment[]> => {
+        return context.connection
+          .getRepository(DbComment)
+          .createQueryBuilder("comment")
+          .where("comment.postId = :postId", {postId: post.postId})
+          .getMany();
+      }
     },
   }),
 });
 
-const CommentType: GraphQLInterfaceType = new GraphQLInterfaceType({
+const CommentType: GraphQLObjectType = new GraphQLObjectType({
   name: "comment",
   description: "Blog comment",
   fields: () => ({
@@ -90,7 +103,7 @@ const CommentType: GraphQLInterfaceType = new GraphQLInterfaceType({
       description: "ID of user who posted the comment",
     },
     postId: {
-      type: new GraphQLNonNull(GraphQLString),
+      type: new GraphQLNonNull(GraphQLInt),
       description: "ID of post commented on",
     },
     content: {
@@ -99,7 +112,13 @@ const CommentType: GraphQLInterfaceType = new GraphQLInterfaceType({
     },
     user: {
       type: UserType,
-      resolve: (comment) => client("user").select("*").where({userId: comment.userId}).first()
+      resolve: (comment, _, context: {connection: Connection}): Promise<User | undefined> => {
+        return context.connection
+          .getRepository(DbUser)
+          .createQueryBuilder("user")
+          .where("user.userId = :userId", {userId: comment.userId})
+          .getOne();
+      }
     }
   }),
 });
@@ -112,14 +131,21 @@ const schema = new GraphQLSchema({
         fields: {
           users: {
             type: new GraphQLList(UserType),
-            async resolve(_source) {
-              return client('user').select("*");
+            async resolve(_, __, context: {connection: Connection}): Promise<User[]> {
+              return context.connection
+                .getRepository(DbUser)
+                .createQueryBuilder("user")
+                .getMany();
             },
           },
           user: {
             type: UserType,
-            async resolve(_source, {userId}) {
-              return client('user').select("*").where({userId}).first();
+            async resolve(_, {userId}, context): Promise<User | undefined> {
+              return context.connection
+                .getRepository(DbUser)
+                .createQueryBuilder("user")
+                .where("user.userId = :userId", {userId})
+                .getOne();
             },
             args: {
               userId: {
@@ -130,14 +156,21 @@ const schema = new GraphQLSchema({
           },
           posts: {
             type: new GraphQLList(PostType),
-            async resolve(_source) {
-              return client('post').select("*");
+            async resolve(_, __, context: {connection: Connection}): Promise<Post[]> {
+              return context.connection
+                .getRepository(DbPost)
+                .createQueryBuilder("post")
+                .getMany();
             },
           },
           post: {
             type: PostType,
-            async resolve(_source, {postId}) {
-              return client('post').select("*").where({postId}).first();
+            async resolve(_, {postId}, context: {connection: Connection}): Promise<Post | undefined> {
+              return context.connection
+                .getRepository(DbPost)
+                .createQueryBuilder("post")
+                .where("post.postId = :postId", {postId})
+                .getOne();
             },
             args: {
               postId: {
@@ -148,14 +181,21 @@ const schema = new GraphQLSchema({
           },
           comments: {
             type: new GraphQLList(CommentType),
-            async resolve(_source) {
-              return client('comment').select("*");
+            async resolve(_, __, context: {connection: Connection}): Promise<Comment[]> {
+              return context.connection
+                .getRepository(DbComment)
+                .createQueryBuilder("comment")
+                .getMany();
             },
           },
           comment: {
             type: CommentType,
-            async resolve(_source, {commentId}) {
-              return client('comment').select("*").where({commentId}).first();
+            async resolve(_source, {commentId}, context: {connection: Connection}): Promise<Comment | undefined> {
+              return context.connection
+                .getRepository(DbComment)
+                .createQueryBuilder("comment")
+                .where("comment.commentId = :commentId", {commentId})
+                .getOne();
             },
             args: {
               commentId: {
@@ -168,6 +208,7 @@ const schema = new GraphQLSchema({
     })
 });
 
+/* codegen stuff */
 
 async function performCodegen(options: Types.GenerateOptions): Promise<void> {
   const output = await codegen(options);
@@ -207,11 +248,22 @@ export async function performTypeScriptCodegen(): Promise<void> {
 performAstCodegen();
 performTypeScriptCodegen();
 
-const app = express();
-app.use("/graphql", graphqlHTTP({
-  schema: schema,
-  graphiql: true,
-}));
+/* typeorm entities */
 
-app.listen(4000);
-console.log("Running a GraphQL API server at http://localhost:4000/graphql");
+/* start server */
+
+async function serve(): Promise<void> {
+  const connection = await getConnection();
+
+  const app = express();
+  app.use("/graphql", graphqlHTTP({
+    schema: schema,
+    graphiql: true,
+    context: {connection}
+  }));
+
+  app.listen(4000);
+  console.log("Running a GraphQL API server at http://localhost:4000/graphql");
+}
+
+serve();

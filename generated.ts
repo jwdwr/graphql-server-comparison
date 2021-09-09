@@ -42,6 +42,7 @@ export type QueryCommentArgs = {
 
 /** Blog user */
 export type User = {
+  __typename?: 'User';
   /** User ID */
   userId: Scalars['Int'];
   /** User email address */
@@ -53,6 +54,7 @@ export type User = {
 
 /** Blog post */
 export type Post = {
+  __typename?: 'Post';
   /** Post ID */
   postId: Scalars['Int'];
   /** ID of user who posted the blog */
@@ -67,12 +69,13 @@ export type Post = {
 
 /** Blog comment */
 export type Comment = {
+  __typename?: 'comment';
   /** Comment ID */
   commentId: Scalars['Int'];
   /** ID of user who posted the comment */
   userId: Scalars['Int'];
   /** ID of post commented on */
-  postId: Scalars['String'];
+  postId: Scalars['Int'];
   /** Comment content */
   content: Scalars['String'];
   user?: Maybe<User>;
